@@ -1,0 +1,8 @@
+{
+  "appId": "com.usgp.nivel10",
+  "appName": "10mo Nivel",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0e0e11"
+  }
+}
