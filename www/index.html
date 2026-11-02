@@ -35,9 +35,9 @@ h2{font-size:20px;margin:0 0 4px}
 .ringbox{position:relative;width:240px;height:240px;margin:8px auto}
 .ringbox svg{transform:rotate(-90deg)}
 .clock{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:700;font-variant-numeric:tabular-nums}
-.btns{display:flex;gap:12px;justify-content:center;margin:16px 0}
-.btns button{flex:1;max-width:170px;padding:14px;border:0;border-radius:12px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;color:#fff}
-#go{background:var(--ac)}#stop{background:#44444f}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+.btns button{padding:14px 8px;border:0;border-radius:12px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;color:#fff}
+#go{background:var(--ac)}#pause{background:#5a5a66}#stop{background:#44444f}#fin{background:#1f9d6a}.total{font-size:30px;font-weight:700;color:var(--ac);margin:4px 0 10px}
 .stats{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;text-align:center}
 .stats div{margin:4px 0}
 #msg{position:fixed;left:50%;top:22%;transform:translate(-50%,-30px);background:var(--ac);color:#fff;padding:16px 22px;border-radius:16px;font-weight:700;text-align:center;opacity:0;pointer-events:none;transition:.4s;z-index:20;width:min(88vw,380px)}
@@ -61,8 +61,8 @@ canvas{position:fixed;inset:0;pointer-events:none;z-index:10}
 <svg width="240" height="240"><circle cx="120" cy="120" r="108" fill="none" stroke="var(--bd)" stroke-width="12"/><circle id="arc" cx="120" cy="120" r="108" fill="none" stroke="var(--ac)" stroke-width="12" stroke-linecap="round" stroke-dasharray="678.6" stroke-dashoffset="678.6"/></svg>
 <div class="clock" id="clk">00:00</div>
 </div>
-<div class="btns"><button id="go">▶ Inicio</button><button id="stop">■ Parar</button></div>
-<div class="stats"><div>Tiempo total: <b id="tt">0 min</b></div><div>Pomodoros completos: <b id="pc">0</b></div><div class="checks" id="ck"></div></div>
+<div class="btns"><button id="go">▶ Inicio</button><button id="pause">⏸ Pausa</button><button id="stop">■ Parar</button><button id="fin">✓ Terminar aquí</button></div>
+<div class="stats"><div>Tiempo Total de Estudio</div><div class="total" id="tt">0 s</div><div>Pomodoros completos: <b id="pc">0</b></div><div class="checks" id="ck"></div></div>
 </div>
 </div>
 <script>
@@ -71,7 +71,7 @@ var KEY="usgp10mo",S={};
 try{S=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
 SUBJ.forEach(function(s){if(!S[s[0]])S[s[0]]={sec:0,pom:0}});
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
-function fmt(sec){var m=Math.floor(sec/60);if(m<60)return m+" min";var h=Math.floor(m/60);return h+" h "+(m%60)+" min"}
+function fmt(sec){sec=Math.round(sec);var h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60,o="";if(h)o+=h+" h ";if(h||m)o+=m+" min ";if(!h)o+=s+" s";return o.trim()}
 function $(i){return document.getElementById(i)}
 function renderList(){
  $("list").innerHTML="";
@@ -80,7 +80,7 @@ function renderList(){
   b.innerHTML="<div><b>"+s[1]+"</b><div class='checks'>"+"✓".repeat(Math.min(d.pom,40))+"</div></div><div class='time'>"+fmt(d.sec)+"<small>"+d.pom+" 🍅</small></div>";
   b.onclick=function(){openSubj(s)};$("list").appendChild(b)});
 }
-var cur=null,phase="idle",t0=0,last=0,iv=null,R=678.6;
+var cur=null,phase="idle",paused=false,el0=0,t0=0,iv=null,R=678.6;
 var ORD=["","1er","2do","3er","4to","5to","6to","7mo","8vo","9no","10mo"];
 function ord(n){return n<=10?ORD[n]:n+"º"}
 function openSubj(s){
@@ -90,22 +90,29 @@ function openSubj(s){
 $("back").onclick=function(){reset();$("detail").style.display="none";$("detail").classList.remove("show");$("home").style.display="block";renderList()};
 function refresh(){var d=S[cur[0]];$("tt").textContent=fmt(d.sec);$("pc").textContent=d.pom;$("ck").textContent="✓".repeat(Math.min(d.pom,40))}
 function draw(el,tot){var m=Math.floor(el/60),s=Math.floor(el%60);$("clk").textContent=(m<10?"0":"")+m+":"+(s<10?"0":"")+s;$("arc").style.strokeDashoffset=R*(1-Math.min(el/tot,1))}
-function reset(){clearInterval(iv);phase="idle";$("ph").textContent="Listo para estudiar";draw(0,1500);if(cur)refresh()}
-$("go").onclick=function(){if(phase!=="idle")return;phase="study";t0=last=Date.now();$("ph").textContent="📖 Estudio · 25 min";iv=setInterval(tick,500);tick()};
-$("stop").onclick=function(){if(phase==="idle")return;tick();save();reset()};
+function elapsed(){return paused?el0:el0+(Date.now()-t0)/1000}
+function reset(){clearInterval(iv);phase="idle";paused=false;el0=0;$("pause").textContent="⏸ Pausa";$("ph").textContent="Listo para estudiar";draw(0,1500);if(cur)refresh()}
+$("go").onclick=function(){if(phase!=="idle")return;phase="study";paused=false;el0=0;t0=Date.now();$("ph").textContent="📖 Estudio · 25 min";iv=setInterval(tick,500);tick()};
+$("pause").onclick=function(){if(phase==="idle")return;
+ if(!paused){el0=elapsed();paused=true;clearInterval(iv);$("pause").textContent="▶ Reanudar";$("ph").textContent+=" · en pausa"}
+ else{paused=false;t0=Date.now();$("pause").textContent="⏸ Pausa";$("ph").textContent=phase==="study"?"📖 Estudio · 25 min":"☕ Descanso · 5 min";iv=setInterval(tick,500);tick()}};
+$("stop").onclick=function(){if(phase==="idle")return;reset()};
+$("fin").onclick=function(){if(phase==="idle")return;
+ if(phase==="study"){var s=Math.floor(Math.min(elapsed(),1500));if(s>0){S[cur[0]].sec+=s;save();banner("✓ Guardado: "+fmt(s))}}
+ else banner("Descanso terminado");
+ reset()};
 function tick(){
- var now=Date.now(),el=(now-t0)/1000,tot=phase==="study"?1500:300;
- if(phase==="study"){var add=Math.min(now,t0+1500000)-last;if(add>0)S[cur[0]].sec+=add/1000;last=now}
+ var now=Date.now(),el=el0+(now-t0)/1000,tot=phase==="study"?1500:300;
  if(el>=tot){
   if(phase==="study"){
-   draw(1500,1500);S[cur[0]].sec=Math.round(S[cur[0]].sec);save();
+   S[cur[0]].sec+=1500;save();draw(1500,1500);
    banner("🎉 Felicidades completaste el "+ord(S[cur[0]].pom+1)+" Pomodoro");confetti();
-   phase="break";t0=last=now;$("ph").textContent="☕ Descanso · 5 min";refresh();return;
+   phase="break";el0=0;t0=now;$("ph").textContent="☕ Descanso · 5 min";refresh();return;
   }
   clearInterval(iv);S[cur[0]].pom++;save();phase="idle";draw(300,300);
   $("ph").textContent="✓ Pomodoro guardado";banner("✓ Pomodoro completo guardado");refresh();return;
  }
- draw(el,tot);refresh();if(Math.floor(now/5000)!==Math.floor((now-500)/5000))save();
+ draw(el,tot);
 }
 function banner(t){var m=$("msg");m.textContent=t;m.classList.add("on");setTimeout(function(){m.classList.remove("on")},4500)}
 function confetti(){
